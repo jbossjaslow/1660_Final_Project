@@ -76,11 +76,11 @@ public class IndicesConstructedPanel implements PanelInterface {
 	}
 
 	private void searchSelected(ActionEvent e) {
-		viewModel.handleChangeToSearchTermPanelAction();
+		viewModel.handleChangeToSearchTermPanel();
 	}
 
 	private void topNSelected(ActionEvent e) {
-		viewModel.handleChangeToSearchTopNPanelAction();
+		viewModel.handleChangeToSearchTopNPanel();
 	}
 
 	/**
