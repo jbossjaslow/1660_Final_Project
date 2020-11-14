@@ -1,6 +1,7 @@
 import java.awt.EventQueue;
 import java.io.File;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Random;
 
 import javax.swing.JFileChooser;
@@ -121,7 +122,7 @@ public class InvertedIndicesRunner {
 			File[] files = chooser.getSelectedFiles();
 			String fileList = "";
 			for (File f : files) {
-				System.out.println(f.getName());
+				// System.out.println(f.getName());
 				fileList += f.getName() + "\n";
 			}
 			loadEnginePanel.updateFilesSelectedList(fileList);
@@ -135,7 +136,7 @@ public class InvertedIndicesRunner {
 	 */
 	public void handleConstructIndices(String files) {
 		System.out.println("Constructing inverted indices");
-
+		String fileList = files.replaceAll("\n", ","); // use commas instead of newline characters just in case new lines break call
 		// gcp project info
 		String projectId = "our-audio-292023";
 		String clusterName = "cluster-ebba";
@@ -146,9 +147,12 @@ public class InvertedIndicesRunner {
 		Random rand = new Random();
 		currentRandom = rand.nextInt(1000000);
 		String inputDir = hdfsURL + "input"; // input
-		String outputDir = hdfsURL + "invertedIndices" + currentRandom; // input
+		String outputDir = hdfsURL + "invertedIndicesOutput" + currentRandom; // output
 
-		// modify args to change input
+		ArrayList<String> argsList = new ArrayList<String>();
+		argsList.add(inputDir); // add input path
+		argsList.add(outputDir); // add output path
+		argsList.add(fileList); // files white list
 
 		try {
 			// Send job
@@ -157,7 +161,7 @@ public class InvertedIndicesRunner {
 			HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credentials);
 			dataproc = new Dataproc.Builder(new NetHttpTransport(), new JacksonFactory(), requestInitializer).setApplicationName(appName).build();
 			JobPlacement jobPlacement = new JobPlacement().setClusterName(clusterName);
-			HadoopJob hadoopJob = new HadoopJob().setMainClass("IIDriver").setJarFileUris(ImmutableList.of(hdfsURL + "invertedIndices.jar")).setArgs(ImmutableList.of(inputDir, outputDir));
+			HadoopJob hadoopJob = new HadoopJob().setMainClass("IIDriver").setJarFileUris(ImmutableList.of(hdfsURL + "invertedIndices.jar")).setArgs(argsList);
 			SubmitJobRequest jobRequest = new SubmitJobRequest().setJob(new Job().setPlacement(jobPlacement).setHadoopJob(hadoopJob));
 			Job submittedJob = dataproc.projects().regions().jobs().submit(projectId, region, jobRequest).execute();
 
@@ -185,7 +189,7 @@ public class InvertedIndicesRunner {
 	/**
 	 * Go to search for term panel
 	 */
-	public void handleChangeToSearchTermPanelAction() {
+	public void handleChangeToSearchTermPanel() {
 		System.out.println("Searching for term");
 		changeViewTo(searchForTermPanel);
 	}
@@ -193,7 +197,7 @@ public class InvertedIndicesRunner {
 	/**
 	 * Go to top n search panel
 	 */
-	public void handleChangeToSearchTopNPanelAction() {
+	public void handleChangeToSearchTopNPanel() {
 		System.out.println("Top N");
 		changeViewTo(nValuePanel);
 	}
