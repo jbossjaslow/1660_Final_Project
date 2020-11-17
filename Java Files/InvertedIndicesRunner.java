@@ -11,6 +11,7 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.gax.paging.Page;
 import com.google.api.services.dataproc.Dataproc;
 import com.google.api.services.dataproc.model.HadoopJob;
 import com.google.api.services.dataproc.model.Job;
@@ -18,6 +19,10 @@ import com.google.api.services.dataproc.model.JobPlacement;
 import com.google.api.services.dataproc.model.SubmitJobRequest;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
@@ -32,8 +37,14 @@ public class InvertedIndicesRunner {
 	private TopNResultsPanel topNResultsPanel;
 
 	private Dataproc dataproc;
+	private GoogleCredentials credentials;
+	private JobPlacement jobPlacement;
+	private int invertedRandom;
 
-	int currentRandom = 0;
+	private String projectId = "our-audio-292023";
+	private String clusterName = "cluster-ebba";
+	private String hdfsURL = "hdfs:///user/jbossjaslow/";
+	private String region = "us-central1";
 
 	public InvertedIndicesRunner() {
 		//
@@ -138,16 +149,13 @@ public class InvertedIndicesRunner {
 		System.out.println("Constructing inverted indices");
 		String fileList = files.replaceAll("\n", ","); // use commas instead of newline characters just in case new lines break call
 		// gcp project info
-		String projectId = "our-audio-292023";
-		String clusterName = "cluster-ebba";
-		String hdfsURL = "hdfs:///user/jbossjaslow/";
 		String appName = "wordCountAndTopN";
-		String region = "us-central1";
 
 		Random rand = new Random();
-		currentRandom = rand.nextInt(1000000);
+		invertedRandom = rand.nextInt(1000000);
+		System.out.println("Current random: " + invertedRandom);
 		String inputDir = hdfsURL + "input"; // input
-		String outputDir = hdfsURL + "invertedIndicesOutput" + currentRandom; // output
+		String outputDir = hdfsURL + "invertedIndicesOutput" + invertedRandom; // output
 
 		ArrayList<String> argsList = new ArrayList<String>();
 		argsList.add(inputDir); // add input path
@@ -157,29 +165,11 @@ public class InvertedIndicesRunner {
 		try {
 			// Send job
 			InputStream stream = this.getClass().getResourceAsStream("/dataproc_creds.json");
-			GoogleCredentials credentials = GoogleCredentials.fromStream(stream).createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
+			credentials = GoogleCredentials.fromStream(stream).createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 			HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credentials);
 			dataproc = new Dataproc.Builder(new NetHttpTransport(), new JacksonFactory(), requestInitializer).setApplicationName(appName).build();
-			JobPlacement jobPlacement = new JobPlacement().setClusterName(clusterName);
-			HadoopJob hadoopJob = new HadoopJob().setMainClass("IIDriver").setJarFileUris(ImmutableList.of(hdfsURL + "invertedIndices.jar")).setArgs(argsList);
-			SubmitJobRequest jobRequest = new SubmitJobRequest().setJob(new Job().setPlacement(jobPlacement).setHadoopJob(hadoopJob));
-			Job submittedJob = dataproc.projects().regions().jobs().submit(projectId, region, jobRequest).execute();
 
-			// Wait for job to execute to move on
-			String jobId = submittedJob.getReference().getJobId();
-			Job job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
-
-			String status = job.getStatus().getState();
-			while (!status.equalsIgnoreCase("DONE") && !status.equalsIgnoreCase("CANCELLED") && !status.equalsIgnoreCase("ERROR")) {
-				System.out.println("Job not done yet; current state: " + job.getStatus().getState());
-				Thread.sleep(500); // sleep for 0.5 seconds
-				job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
-				status = job.getStatus().getState();
-			}
-
-			System.out.println("Job terminated in state: " + job.getStatus().getState());
-
-			if (status.equalsIgnoreCase("DONE"))
+			if (executeJob("IIDriver", hdfsURL + "invertedIndices.jar", argsList))
 				changeViewTo(indicesConstructedPanel); // change view when successful
 		} catch (Exception err) {
 			err.printStackTrace();
@@ -211,46 +201,48 @@ public class InvertedIndicesRunner {
 		System.out.println(term);
 
 		// gcp project info
-		String projectId = "our-audio-292023";
-		String clusterName = "cluster-ebba";
-		String hdfsURL = "hdfs:///user/jbossjaslow/";
-		String region = "us-central1";
+		String storageBucket = "dataproc-staging-us-central1-834767494839-8vpuiylu";
 
 		Random rand = new Random();
-		currentRandom = rand.nextInt(1000000);
-		String inputDir = hdfsURL + "input"; // input
-		String outputDir = hdfsURL + "invertedIndices" + currentRandom; // input
+		int randy = rand.nextInt(1000000);
+		String inputDir = hdfsURL + "invertedIndicesOutput" + invertedRandom; // input
+		String outputDir = "gs://" + storageBucket + "/" + "output" + randy; // input
 
-		// modify args to change input
+		ArrayList<String> argsList = new ArrayList<String>();
+		argsList.add(inputDir); // add input path
+		argsList.add(outputDir); // add output path
+		argsList.add(term);
 
-		try {
-			// Send job
-			JobPlacement jobPlacement = new JobPlacement().setClusterName(clusterName);
-			HadoopJob hadoopJob = new HadoopJob().setMainClass("IIDriver").setJarFileUris(ImmutableList.of(hdfsURL + "invertedIndices.jar")).setArgs(ImmutableList.of(inputDir, outputDir));
-			SubmitJobRequest jobRequest = new SubmitJobRequest().setJob(new Job().setPlacement(jobPlacement).setHadoopJob(hadoopJob));
-			Job submittedJob = dataproc.projects().regions().jobs().submit(projectId, region, jobRequest).execute();
+		long startTime = System.currentTimeMillis();
 
-			// Wait for job to execute to move on
-			String jobId = submittedJob.getReference().getJobId();
-			Job job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
+		if (!executeJob("WordSearchDriver", hdfsURL + "wordSearch.jar", argsList))
+			return;
 
-			String status = job.getStatus().getState();
-			while (!status.equalsIgnoreCase("DONE") && !status.equalsIgnoreCase("CANCELLED") && !status.equalsIgnoreCase("ERROR")) {
-				System.out.println("Job not done yet; current state: " + job.getStatus().getState());
-				Thread.sleep(500); // sleep for 0.5 seconds
-				job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
-				status = job.getStatus().getState();
+		long endTime = System.currentTimeMillis();
+
+		String outputBucket = "output" + randy;
+		String result = collectResults(storageBucket, outputBucket);
+
+		// print out inverted indices on UI using output generated above
+		if (result.isEmpty()) {
+			System.out.println("The output folder is missing or empty");
+		} else {
+			String[] tokens = result.split("\t"); // occurrence
+			String word = tokens[0];
+			String[] wordOccurrences = tokens[1].split(","); // length is total # of results
+			int numResults = wordOccurrences.length - 1;
+
+			ArrayList<WordSearchResult> resultList = new ArrayList<WordSearchResult>();
+			for (int i = 0; i < numResults; i++) {
+				String[] components = wordOccurrences[i].split("/");
+				resultList.add(new WordSearchResult(components[0], components[1], Integer.parseInt(components[2])));
 			}
 
-			System.out.println("Job terminated in state: " + job.getStatus().getState());
-
-			if (status.equalsIgnoreCase("DONE"))
-				changeViewTo(indicesConstructedPanel); // change view when successful
-		} catch (Exception err) {
-			err.printStackTrace();
+			searchTermResultsPanel.constructTableData(resultList);
+			searchTermResultsPanel.updateSearchTerm(word);
+			searchTermResultsPanel.updateTimeTaken(endTime - startTime);
+			changeViewTo(searchTermResultsPanel);
 		}
-
-		changeViewTo(searchTermResultsPanel);
 	}
 
 	/**
@@ -279,4 +271,46 @@ public class InvertedIndicesRunner {
 		frame.revalidate();
 	}
 
+	private boolean executeJob(String mainClass, String jarFileURI, ArrayList<String> argsList) {
+		try {
+			jobPlacement = new JobPlacement().setClusterName(clusterName);
+			HadoopJob hadoopJob = new HadoopJob().setMainClass(mainClass).setJarFileUris(ImmutableList.of(jarFileURI)).setArgs(argsList);
+			SubmitJobRequest jobRequest = new SubmitJobRequest().setJob(new Job().setPlacement(jobPlacement).setHadoopJob(hadoopJob));
+			Job submittedJob = dataproc.projects().regions().jobs().submit(projectId, region, jobRequest).execute();
+
+			String jobId = submittedJob.getReference().getJobId();
+			Job job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
+			String status = job.getStatus().getState();
+			while (!(status.equals("DONE") || status.equals("CANCELLED") || status.equals("ERROR"))) {
+				System.out.println("Status: " + status);
+				Thread.sleep(500); // sleep for 0.5 seconds
+				job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
+				status = job.getStatus().getState();
+			}
+
+			System.out.println("Finished with status: " + status);
+			return status.equals("DONE");
+
+		} catch (Exception err) {
+			err.printStackTrace();
+			return false;
+		}
+	}
+
+	private String collectResults(String storageBucket, String outputBucket) {
+		String result = ""; // several results come back, most of which are empty
+		try {
+			Storage storage = StorageOptions.newBuilder().setCredentials(credentials).setProjectId(projectId).build().getService();
+			Bucket bucket = storage.get(storageBucket);
+			Page<Blob> blobs = bucket.list(Storage.BlobListOption.prefix(outputBucket));
+			for (Blob blob : blobs.iterateAll()) {
+				String blobContent = new String(blob.getContent());
+				if (!blobContent.isEmpty())
+					result = blobContent;
+			}
+		} catch (Exception err) {
+			err.printStackTrace();
+		}
+		return result;
+	}
 }
