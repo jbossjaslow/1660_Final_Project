@@ -41,10 +41,12 @@ public class InvertedIndicesRunner {
 	private JobPlacement jobPlacement;
 	private int invertedRandom;
 
+	// Project info
 	private String projectId = "our-audio-292023";
 	private String clusterName = "cluster-ebba";
 	private String hdfsURL = "hdfs:///user/jbossjaslow/";
 	private String region = "us-central1";
+	private String storageBucket = "dataproc-staging-us-central1-834767494839-8vpuiylu";
 
 	public InvertedIndicesRunner() {
 		//
@@ -163,7 +165,7 @@ public class InvertedIndicesRunner {
 		argsList.add(fileList); // files white list
 
 		try {
-			// Send job
+			// Only need to get the credentials and initialize dataproc cluster once
 			InputStream stream = this.getClass().getResourceAsStream("/dataproc_creds.json");
 			credentials = GoogleCredentials.fromStream(stream).createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 			HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credentials);
@@ -200,9 +202,6 @@ public class InvertedIndicesRunner {
 	public void handleSearchForTerm(String term) {
 		System.out.println(term);
 
-		// gcp project info
-		String storageBucket = "dataproc-staging-us-central1-834767494839-8vpuiylu";
-
 		Random rand = new Random();
 		int randy = rand.nextInt(1000000);
 		String inputDir = hdfsURL + "invertedIndicesOutput" + invertedRandom; // input
@@ -223,7 +222,6 @@ public class InvertedIndicesRunner {
 		String outputBucket = "output" + randy;
 		String result = collectResults(storageBucket, outputBucket);
 
-		// print out inverted indices on UI using output generated above
 		if (result.isEmpty()) {
 			System.out.println("The output folder is missing or empty");
 		} else {
@@ -252,7 +250,38 @@ public class InvertedIndicesRunner {
 	 */
 	public void handleSearchForTopN(int num) {
 		System.out.println(num);
-		changeViewTo(topNResultsPanel);
+
+		Random rand = new Random();
+		int randy = rand.nextInt(1000000);
+		String inputDir = hdfsURL + "invertedIndicesOutput" + invertedRandom; // input
+		String outputDir = "gs://" + storageBucket + "/" + "output" + randy; // input
+
+		ArrayList<String> argsList = new ArrayList<String>();
+		argsList.add(inputDir); // add input path
+		argsList.add(outputDir); // add output path
+		argsList.add(Integer.toString(num));
+
+		if (!executeJob("TopNIIDriver", hdfsURL + "topNII.jar", argsList))
+			return;
+
+		String outputBucket = "output" + randy;
+		String result = collectResults(storageBucket, outputBucket);
+
+		if (result.isEmpty()) {
+			System.out.println("The output folder is missing or empty");
+		} else {
+			ArrayList<TopNSearchResult> resultList = new ArrayList<TopNSearchResult>();
+			for (String wordAndFreq : result.split("\n")) {
+				if (!wordAndFreq.isEmpty()) {
+					String[] tokens = wordAndFreq.split("\t");
+					resultList.add(new TopNSearchResult(tokens[0], Integer.parseInt(tokens[1])));
+				}
+			}
+
+			topNResultsPanel.constructTableData(resultList);
+			topNResultsPanel.updateNValue(num);
+			changeViewTo(topNResultsPanel);
+		}
 	}
 
 	/**
@@ -302,8 +331,8 @@ public class InvertedIndicesRunner {
 		try {
 			Storage storage = StorageOptions.newBuilder().setCredentials(credentials).setProjectId(projectId).build().getService();
 			Bucket bucket = storage.get(storageBucket);
-			Page<Blob> blobs = bucket.list(Storage.BlobListOption.prefix(outputBucket));
-			for (Blob blob : blobs.iterateAll()) {
+			Page<Blob> pageOfBlobs = bucket.list(Storage.BlobListOption.prefix(outputBucket));
+			for (Blob blob : pageOfBlobs.iterateAll()) {
 				String blobContent = new String(blob.getContent());
 				if (!blobContent.isEmpty())
 					result = blobContent;

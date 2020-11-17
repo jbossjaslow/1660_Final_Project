@@ -13,6 +13,6 @@ public class WordSearchResult implements Comparable<WordSearchResult> {
 
 	@Override
 	public int compareTo(WordSearchResult o) {
-		return Integer.compare(freq, o.freq);
+		return -Integer.compare(freq, o.freq);
 	}
 }

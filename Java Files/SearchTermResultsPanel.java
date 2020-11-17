@@ -30,24 +30,6 @@ public class SearchTermResultsPanel implements PanelInterface {
 		initialize();
 	}
 
-//	public void constructTableData(int[] docIDs, String[] docFolders, String[] docNames, int[] frequencies) {
-////		double totalLength = docIDs.length + docFolders.length + docNames.length + frequencies.length;
-////		if (totalLength / 4 != frequencies.length)
-////			return;
-//
-//		tableData = new Object[frequencies.length][4];
-//		for (int i = 0; i < frequencies.length; i++) {
-//			tableData[i][0] = docIDs[i];
-//			tableData[i][1] = docFolders[i];
-//			tableData[i][2] = docNames[i];
-//			tableData[i][3] = frequencies[i];
-//		}
-//
-//		model = new DefaultTableModel(tableData, columnNames);
-//		table.setModel(model);
-//		model.fireTableDataChanged();
-//	}
-
 	public void constructTableData(ArrayList<WordSearchResult> arr) {
 		// sort array based on freq
 		Collections.sort(arr);

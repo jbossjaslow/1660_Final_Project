@@ -1,5 +1,7 @@
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -8,6 +10,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.SpringLayout;
+import javax.swing.table.DefaultTableModel;
 
 public class TopNResultsPanel implements PanelInterface {
 
@@ -16,6 +19,7 @@ public class TopNResultsPanel implements PanelInterface {
 	private SpringLayout springLayout;
 	private JTable table;
 	private JLabel TopNTermsLabel;
+	private DefaultTableModel model;
 
 	private String[] columnNames = { "Term", "Total Frequencies" };
 	private Object[][] tableData = { { "KING", 5000 }, { "HENRY", 4500 }, { "THE", 4000 }, { "FOURTH", 3500 }, { "SIR", 3000 }, { "WALTER", 2500 }, { "BLUNT", 2000 }, { "OWEN", 1500 }, { "GELNDOWER", 1000 }, { "RICHARD", 500 }, };
@@ -23,6 +27,25 @@ public class TopNResultsPanel implements PanelInterface {
 	public TopNResultsPanel(InvertedIndicesRunner viewModel, JFrame frame) {
 		this.viewModel = viewModel;
 		initialize();
+	}
+
+	public void constructTableData(ArrayList<TopNSearchResult> arr) {
+		// sort array based on freq
+		Collections.sort(arr);
+
+		tableData = new Object[arr.size()][2];
+		for (int i = 0; i < arr.size(); i++) {
+			tableData[i][0] = arr.get(i).term;
+			tableData[i][1] = arr.get(i).totalFreq;
+		}
+
+		model = new DefaultTableModel(tableData, columnNames);
+		table.setModel(model);
+		model.fireTableDataChanged();
+	}
+
+	public void updateNValue(int num) {
+		TopNTermsLabel.setText("Top-" + num + " Frequent Terms");
 	}
 
 	private void initialize() {
@@ -40,7 +63,8 @@ public class TopNResultsPanel implements PanelInterface {
 		springLayout.putConstraint(SpringLayout.EAST, BackButton, -10, SpringLayout.EAST, panel);
 		panel.add(BackButton);
 
-		table = new JTable(tableData, columnNames);
+		model = new DefaultTableModel(tableData, columnNames);
+		table = new JTable(model);
 		table.setEnabled(false);
 		table.setRowSelectionAllowed(false);
 
@@ -55,17 +79,6 @@ public class TopNResultsPanel implements PanelInterface {
 		springLayout.putConstraint(SpringLayout.WEST, TopNTermsLabel, 24, SpringLayout.WEST, panel);
 		springLayout.putConstraint(SpringLayout.SOUTH, TopNTermsLabel, -19, SpringLayout.NORTH, scrollPane);
 		panel.add(TopNTermsLabel);
-	}
-
-	public void constructTableData(String[] terms, int[] frequencies) {
-		if (terms.length != frequencies.length)
-			return;
-
-		tableData = new Object[terms.length][2];
-		for (int i = 0; i < terms.length; i++) {
-			tableData[i][0] = terms[i];
-			tableData[i][1] = frequencies[i];
-		}
 	}
 
 	private void goBack() {
