@@ -18,4 +18,4 @@
 * While running the program, it can take a minute or two to run the cloud programs and return back with the data. Therefore, keep an eye on the Xquartz terminal, as it will continuously report the status of the job while it is running
 
 ## Click <https://pitt-my.sharepoint.com/:v:/g/personal/joj43_pitt_edu/EW6SX_KydQJHheR2D7lLx9QBW1A9qQ8rpI3moJ6wRSOIhQ?e=hk7QmV> to view the video of the project walkthrough on OneDrive
-## If OneDrive is making the video too blurry or pixelated, here's a [YouTube link](https://youtu.be/xt3q6LfdEwc) with my video which may be easier to watch
+## If OneDrive is making the video too blurry or pixelated, here's a [YouTube link](https://youtu.be/xt3q6LfdEwc) with my video which may be easier to watch (I recommend viewing in 1080p on full screen to properly see all of the text)
