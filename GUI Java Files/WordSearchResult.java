@@ -1,6 +1,5 @@
 public class WordSearchResult implements Comparable<WordSearchResult> {
 
-	int docId = 0;
 	String folder = "input";
 	String fileName = "testFile";
 	int freq = 0;
@@ -9,6 +8,16 @@ public class WordSearchResult implements Comparable<WordSearchResult> {
 		this.folder = folder;
 		this.fileName = fileName;
 		this.freq = freq;
+	}
+
+	/**
+	 * Generate a unique document id for each file name. The result should be
+	 * reproducible for the same input
+	 * 
+	 * @return An integer that is unique
+	 */
+	public int getDocID() {
+		return fileName.hashCode();
 	}
 
 	@Override

@@ -1,6 +1,6 @@
 import java.awt.EventQueue;
 import java.io.File;
-import java.io.InputStream;
+import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -166,12 +166,14 @@ public class InvertedIndicesRunner {
 
 		try {
 			// Only need to get the credentials and initialize dataproc cluster once
-			InputStream stream = this.getClass().getResourceAsStream("/dataproc_creds.json");
-			credentials = GoogleCredentials.fromStream(stream).createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
+
+			// adapted from
+			// https://cloud.google.com/docs/authentication/production#auth-cloud-explicit-java
+			credentials = GoogleCredentials.fromStream(new FileInputStream("/dataproc_creds.json")).createScoped(Lists.newArrayList("https://www.googleapis.com/auth/cloud-platform"));
 			HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credentials);
 			dataproc = new Dataproc.Builder(new NetHttpTransport(), new JacksonFactory(), requestInitializer).setApplicationName(appName).build();
 
-			if (executeJob("IIDriver", hdfsURL + "invertedIndices.jar", argsList))
+			if (executeJob("IIDriver", "invertedIndices.jar", argsList))
 				changeViewTo(indicesConstructedPanel); // change view when successful
 		} catch (Exception err) {
 			err.printStackTrace();
@@ -214,7 +216,7 @@ public class InvertedIndicesRunner {
 
 		long startTime = System.currentTimeMillis();
 
-		if (!executeJob("WordSearchDriver", hdfsURL + "wordSearch.jar", argsList))
+		if (!executeJob("WordSearchDriver", "wordSearch.jar", argsList))
 			return;
 
 		long endTime = System.currentTimeMillis();
@@ -261,7 +263,7 @@ public class InvertedIndicesRunner {
 		argsList.add(outputDir); // add output path
 		argsList.add(Integer.toString(num));
 
-		if (!executeJob("TopNIIDriver", hdfsURL + "topNII.jar", argsList))
+		if (!executeJob("TopNIIDriver", "topNII.jar", argsList))
 			return;
 
 		String outputBucket = "output" + randy;
@@ -301,18 +303,22 @@ public class InvertedIndicesRunner {
 	}
 
 	private boolean executeJob(String mainClass, String jarFileURI, ArrayList<String> argsList) {
+		// adapted from
+		// https://stackoverflow.com/questions/35611770/how-do-you-use-the-google-dataproc-java-client-to-submit-spark-jobs-using-jar-fi
+		// and
+		// https://stackoverflow.com/questions/35704048/what-is-the-best-way-to-wait-for-a-google-dataproc-sparkjob-in-java
 		try {
 			jobPlacement = new JobPlacement().setClusterName(clusterName);
-			HadoopJob hadoopJob = new HadoopJob().setMainClass(mainClass).setJarFileUris(ImmutableList.of(jarFileURI)).setArgs(argsList);
+			HadoopJob hadoopJob = new HadoopJob().setMainClass(mainClass).setJarFileUris(ImmutableList.of(hdfsURL + jarFileURI)).setArgs(argsList);
 			SubmitJobRequest jobRequest = new SubmitJobRequest().setJob(new Job().setPlacement(jobPlacement).setHadoopJob(hadoopJob));
 			Job submittedJob = dataproc.projects().regions().jobs().submit(projectId, region, jobRequest).execute();
 
 			String jobId = submittedJob.getReference().getJobId();
 			Job job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
 			String status = job.getStatus().getState();
-			while (!(status.equals("DONE") || status.equals("CANCELLED") || status.equals("ERROR"))) {
+			while (!isJobFinished(status)) {
 				System.out.println("Status: " + status);
-				Thread.sleep(500); // sleep for 0.5 seconds
+				Thread.sleep(500); // check every 0.5 seconds
 				job = dataproc.projects().regions().jobs().get(projectId, region, jobId).execute();
 				status = job.getStatus().getState();
 			}
@@ -326,7 +332,14 @@ public class InvertedIndicesRunner {
 		}
 	}
 
+	private boolean isJobFinished(String status) {
+		return status.equals(ProjectStatus.DONE.toString()) || status.equals(ProjectStatus.CANCELLED.toString()) || status.equals(ProjectStatus.ERROR.toString());
+	}
+
 	private String collectResults(String storageBucket, String outputBucket) {
+		// adapted from
+		// https://stackoverflow.com/questions/25141998/how-to-download-a-file-from-google-cloud-storage-with-java
+
 		String result = ""; // several results come back, most of which are empty
 		try {
 			Storage storage = StorageOptions.newBuilder().setCredentials(credentials).setProjectId(projectId).build().getService();

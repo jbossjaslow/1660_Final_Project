@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.StringTokenizer;
@@ -14,6 +15,7 @@ public class IIMapper extends Mapper<Object, Text, Text, Text> {
 	Text fileNameAndPath;
 	List<String> fileWhiteList;
 	String currentFile;
+	private ArrayList<String> stopWords;
 
 	@Override
 	public void setup(Context context) throws IOException, InterruptedException {
@@ -29,6 +31,18 @@ public class IIMapper extends Mapper<Object, Text, Text, Text> {
 		fileNameAndPath = new Text(fileFolder + "/" + fileName);
 
 		currentFile = fileName;
+
+		stopWords = new ArrayList<String>();
+		stopWords.add("the");
+		stopWords.add("be");
+		stopWords.add("to");
+		stopWords.add("of");
+		stopWords.add("and");
+		stopWords.add("a");
+		stopWords.add("in");
+		stopWords.add("that");
+		stopWords.add("have");
+		stopWords.add("i");
 	}
 
 	@Override
@@ -36,12 +50,15 @@ public class IIMapper extends Mapper<Object, Text, Text, Text> {
 		if (!fileWhiteList.contains(currentFile)) // if current file is not in file white list, don't bother mapping it
 			return;
 
-		StringTokenizer itr = new StringTokenizer(value.toString(), " \t\n\r\f\",.:;?![]'");
+		// adapted from
+		// http://deepakmodi2006.blogspot.com/2012/05/jpos-source-code-in-internet.html
+		StringTokenizer itr = new StringTokenizer(value.toString(), " \t\n\r\f\",.:;?![]"); // arg2 filters out unneeded punctuation
 
 		String word;
 		while (itr.hasMoreTokens()) {
-			word = itr.nextToken();
-			context.write(new Text(word), fileNameAndPath);
+			word = itr.nextToken().toLowerCase();
+			if (!stopWords.contains(word))
+				context.write(new Text(word), fileNameAndPath);
 		}
 	}
 }

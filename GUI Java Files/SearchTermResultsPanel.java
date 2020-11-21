@@ -36,7 +36,7 @@ public class SearchTermResultsPanel implements PanelInterface {
 
 		tableData = new Object[arr.size()][4];
 		for (int i = 0; i < arr.size(); i++) {
-			tableData[i][0] = arr.get(i).docId;
+			tableData[i][0] = arr.get(i).getDocID();
 			tableData[i][1] = arr.get(i).folder;
 			tableData[i][2] = arr.get(i).fileName;
 			tableData[i][3] = arr.get(i).freq;
